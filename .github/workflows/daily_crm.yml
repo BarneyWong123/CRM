@@ -23,12 +23,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Cache processed messages
+        uses: actions/cache@v4
+        with:
+          path: processed_messages.json
+          key: crm-state-${{ github.run_id }}
+          restore-keys: |
+            crm-state-
+
       - name: Run CRM Analysis
         env:
           GMAIL_EMAIL: ${{ secrets.GMAIL_EMAIL }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           SUMMARY_RECIPIENT: ${{ secrets.SUMMARY_RECIPIENT }}
         run: |
-          # The script runs once on startup, which is what we want for a scheduled job
-          # We force it to exit after the first job completion for cloud execution
+          # The script runs once on startup
           python main.py --once
