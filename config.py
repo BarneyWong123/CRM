@@ -22,6 +22,7 @@ class Config:
     # Email search settings
     # We poll for the CRM label
     EMAIL_LABEL = 'CRM'
+    SEARCH_DAYS_BACK = 7
     
     # Analysis settings
     TARGET_OWNERS = ['Arora Johney', 'Jiun Hao (Barney) Wong']
@@ -36,6 +37,7 @@ class Config:
     
     # Excel processing settings
     TARGET_SHEET_NAME = 'MY-Clinical'
+    EXCEL_HEADER_ROW = 2
     DOWNLOAD_DIR = 'downloads'
     STATE_FILE = 'processed_messages.json'
     

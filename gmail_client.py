@@ -8,6 +8,7 @@ from email.mime.multipart import MIMEMultipart
 import os
 import base64
 from typing import List, Dict, Optional
+from datetime import datetime, timedelta
 from config import Config
 
 
@@ -59,21 +60,33 @@ class GmailClient:
             # Select the CRM label (Gmail uses label names as folders in IMAP)
             status, _ = self.imap.select(f'"{Config.EMAIL_LABEL}"')
             if status != 'OK':
-                # Fallback to INBOX if label not found
-                self.imap.select('INBOX')
-                print(f"⚠ Label '{Config.EMAIL_LABEL}' not found, checking INBOX...")
+                # Strictly fail if label not found to avoid unintended processing
+                print(f"❌ Label '{Config.EMAIL_LABEL}' not found. Please create this label in Gmail.")
+                return []
+
+            # Calculate date for search
+            since_date = (datetime.now() - timedelta(days=Config.SEARCH_DAYS_BACK)).strftime("%d-%b-%Y")
+            print(f"Searching for emails since {since_date}...")
+
+            # Search for messages since date
+            # Note: IMAP search criteria are space-separated
+            status, messages = self.imap.search(None, f'(SINCE "{since_date}")')
             
-            # Search for all messages (we handle deduplication locally)
-            status, messages = self.imap.search(None, 'ALL')
             if status != 'OK' or not messages[0]:
+                print("No emails found in search criteria.")
                 return []
             
             email_ids = messages[0].split()
-            print(f"Checking {len(email_ids)} emails in '{Config.EMAIL_LABEL}'...")
+            print(f"Found {len(email_ids)} emails in '{Config.EMAIL_LABEL}' since {since_date}...")
             
             emails = []
-            # Check last 10 for performance in polling
-            for email_id in reversed(email_ids[-10:]):
+            # Check last 10 (or all if less than 10) for performance
+            # If we want to process all, we can remove the slicing, but slicing is safer for large results
+            # Given we have a date filter, maybe we should process all returned?
+            # But the original logic had deduplication. Let's stick to last 20 to be safe but better than 10.
+            ids_to_check = email_ids[-20:] if len(email_ids) > 20 else email_ids
+
+            for email_id in reversed(ids_to_check):
                 email_data = self._get_message_details(email_id)
                 if email_data and email_data['attachments']:
                     emails.append(email_data)
@@ -124,11 +137,18 @@ class GmailClient:
 
     def _decode_header(self, header: str) -> str:
         if not header: return ''
-        decoded_parts = decode_header(header)
-        return "".join([
-            (p.decode(e or 'utf-8') if isinstance(p, bytes) else p) 
-            for p, e in decoded_parts
-        ])
+        try:
+            decoded_parts = decode_header(header)
+            return "".join([
+                (p.decode(e or 'utf-8') if isinstance(p, bytes) else p)
+                for p, e in decoded_parts
+            ])
+        except Exception:
+            # Fallback if decoding fails
+            try:
+                return str(header)
+            except:
+                return "Unknown Header"
 
     def close(self):
         if self.imap:

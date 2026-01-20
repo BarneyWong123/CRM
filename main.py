@@ -39,7 +39,11 @@ def run_once(gmail, processor, state):
                 print(f"✓ Downloaded {filename}")
                 
                 # Analyze
-                df_precise = pd.read_excel(filepath, sheet_name=Config.TARGET_SHEET_NAME, header=2)
+                df_precise = processor.extract_sheet(filepath, header_row=Config.EXCEL_HEADER_ROW)
+                if df_precise is None:
+                    print(f"Skipping analysis for {filename} (Sheet extraction failed)")
+                    continue
+
                 analyzer = CRMAnalyzer(df_precise)
                 html_report = analyzer.generate_report()
                 
