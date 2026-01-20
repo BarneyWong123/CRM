@@ -76,34 +76,33 @@ def main():
     processor = ExcelProcessor()
     state = StateManager(Config.STATE_FILE)
     
-    # Define the job
-    def job():
-        try:
-            run_once(gmail, processor, state)
-        except Exception as e:
-            print(f"❌ Scheduled job error: {e}")
-
+    print(f"Trigger: Emails in label '{Config.EMAIL_LABEL}'")
+    print(f"Recipient: {Config.SUMMARY_RECIPIENT}")
+    print(f"Polling Interval: 60s")
+    print("Press Ctrl+C to stop.")
+    
     # Run once immediately
     print("\n--- Initial catch-up check ---")
-    job()
-    
+    try:
+        run_once(gmail, processor, state)
+    except Exception as e:
+        print(f"❌ Initial check error: {e}")
+        
     if args.once:
         print("\nSingle run complete (--once flag). Exiting.")
         gmail.close()
         return
 
-    import schedule
-    schedule.every().day.at(Config.DAILY_SCHEDULE_TIME).do(job)
-    
-    print(f"Schedule: Everyday at {Config.DAILY_SCHEDULE_TIME}")
-    print(f"Trigger: Emails in label '{Config.EMAIL_LABEL}'")
-    print(f"Recipient: {Config.SUMMARY_RECIPIENT}")
-    print("Press Ctrl+C to stop.")
-    
     try:
         while True:
-            schedule.run_pending()
-            time.sleep(1)
+            try:
+                run_once(gmail, processor, state)
+            except Exception as e:
+                print(f"⚠ Cycle error: {e}. Retrying in 10s...")
+                time.sleep(10)
+                continue
+                
+            time.sleep(60) # Poll every minute for "instant" trigger
     except KeyboardInterrupt:
         print("\nStopping automation...")
     finally:

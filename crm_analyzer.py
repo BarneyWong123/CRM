@@ -30,7 +30,7 @@ class CRMAnalyzer:
         
         self.cols = {
             'account': 'col_0',
-            'brand': 'col_4',
+            'brand': 'col_11', # Corrected from col_4 (which was Existing Brand)
             'product': 'col_12',
             'value': 'col_17',
             'owner': 'col_18',
@@ -47,6 +47,9 @@ class CRMAnalyzer:
     def generate_report(self) -> str:
         """Generate the full formatted HTML CRM summary report."""
         now = datetime.now().strftime("%B %d, %Y")
+        
+        # Get AI insights
+        ai_insights = self._get_ai_insights()
         
         html = f"""
         <html>
@@ -70,6 +73,8 @@ class CRMAnalyzer:
             .lost {{ background: #fee2e2; color: #991b1b; }}
             .progress {{ background: #dbeafe; color: #1e40af; }}
             .price {{ font-family: 'Courier New', Courier, monospace; font-weight: bold; color: #059669; }}
+            .ai-box {{ background: #eff6ff; border: 1px solid #bfdbfe; padding: 20px; border-radius: 8px; margin-top: 20px; }}
+            .ai-title {{ color: #1e40af; font-weight: bold; margin-bottom: 10px; display: flex; align-items: center; }}
             .footer {{ margin-top: 40px; font-size: 12px; color: #9ca3af; text-align: center; border-top: 1px solid #e5e7eb; padding-top: 20px; }}
         </style>
         </head>
@@ -85,6 +90,13 @@ class CRMAnalyzer:
                 {self._section6_recent_won_deals()}
                 {self._section7_lost_deals()}
                 
+                <div class="ai-box">
+                    <div class="ai-title">🤖 AI Strategic Insights (GPT-4o mini)</div>
+                    <div style="font-size: 14px; color: #1e3a8a;">
+                        {ai_insights}
+                    </div>
+                </div>
+                
                 <div class="footer">
                     Automated CRM Analysis &bull; MY-Clinical Sheet &bull; Biomed Global
                 </div>
@@ -93,6 +105,48 @@ class CRMAnalyzer:
         </html>
         """
         return html
+
+    def _get_ai_insights(self) -> str:
+        """Fetch AI-generated strategic insights based on the current data."""
+        try:
+            from openai import OpenAI
+            client = OpenAI(api_key=Config.OPENAI_API_KEY)
+            
+            # Prepare summary data for the AI
+            total_value = self.df[self.cols['value']].sum()
+            owner_stats = ""
+            for owner in Config.TARGET_OWNERS:
+                owner_df = self.df[self.df[self.cols['owner']] == owner]
+                owner_stats += f"- {owner}: RM {owner_df[self.cols['value']].sum():,.2f} total, {len(owner_df[owner_df[self.cols['status']] == 'Open'])} open deals.\n"
+            
+            high_val_count = len(self.df[(self.df[self.cols['status']] == 'Open') & (self.df[self.cols['value']] > 500000)])
+            top_brands = self.df[self.cols['brand']].value_counts().head(3).to_dict()
+            
+            prompt = f"""
+            As a sales strategy assistant, provide 3 brief, high-impact strategic insights based on this CRM data:
+            - Total Pipeline Value: RM {total_value:,.2f}
+            - Owner Performance:
+            {owner_stats}
+            - High-Value Deals (>500k) pending: {high_val_count}
+            - Current Top 3 Brands being pitched: {top_brands}
+            
+            Analyze the distribution and value. Keep each point professional, concise, and action-oriented.
+            Return the output as an HTML bulleted list (<ul> and <li>).
+            Do not include any other text before or after the list.
+            """
+            
+            response = client.chat.completions.create(
+                model=Config.AI_MODEL,
+                messages=[
+                    {"role": "system", "content": "You are a professional sales analyst providing concise executive insights."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7
+            )
+            
+            return response.choices[0].message.content
+        except Exception as e:
+            return f"<p style='color: #ef4444;'>AI Analysis currently unavailable: {str(e)}</p>"
 
     def _section1_top_picks(self) -> str:
         """Section 1: TOP 3 OPPORTUNITY PICKS OF THE DAY."""

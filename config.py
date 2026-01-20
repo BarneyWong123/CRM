@@ -11,6 +11,7 @@ class Config:
     # Gmail Credentials (IMAP/SMTP)
     GMAIL_EMAIL = os.getenv('GMAIL_EMAIL')
     GMAIL_APP_PASSWORD = os.getenv('GMAIL_APP_PASSWORD')
+    OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
     
     # Servers
     IMAP_SERVER = 'imap.gmail.com'
@@ -29,6 +30,9 @@ class Config:
     # Automated Scheduling
     DAILY_SCHEDULE_TIME = "17:30"
     POLL_INTERVAL_SECONDS = 1  # For schedule check loop
+    
+    # AI Settings
+    AI_MODEL = "gpt-4o-mini"
     
     # Excel processing settings
     TARGET_SHEET_NAME = 'MY-Clinical'

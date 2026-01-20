@@ -46,3 +46,7 @@ downloads/
 # OS
 .DS_Store
 Thumbs.db
+
+# State
+processed_messages.json
+automation.log
