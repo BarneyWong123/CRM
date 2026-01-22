@@ -7,7 +7,7 @@ from gmail_client import GmailClient
 from excel_processor import ExcelProcessor
 from crm_analyzer import CRMAnalyzer
 from state_manager import StateManager
-from datetime import datetime
+from datetime import datetime, timedelta
 
 def run_once(gmail, processor, state):
     """Perform a single check-and-process cycle."""
@@ -78,7 +78,8 @@ def main():
     
     print(f"Trigger: Emails in label '{Config.EMAIL_LABEL}'")
     print(f"Recipient: {Config.SUMMARY_RECIPIENT}")
-    print(f"Polling Interval: 60s")
+    print(f"Schedule: {Config.SCHEDULE_START_TIME} - {Config.SCHEDULE_END_TIME}")
+    print(f"Polling Interval: {Config.POLL_INTERVAL_SECONDS}s")
     print("Press Ctrl+C to stop.")
     
     # Run once immediately
@@ -93,16 +94,47 @@ def main():
         gmail.close()
         return
 
+    print(f"\n[Scheduler] Entering main loop. Active window: {Config.SCHEDULE_START_TIME} - {Config.SCHEDULE_END_TIME}")
+
     try:
         while True:
-            try:
-                run_once(gmail, processor, state)
-            except Exception as e:
-                print(f"⚠ Cycle error: {e}. Retrying in 10s...")
-                time.sleep(10)
-                continue
+            now = datetime.now()
+            current_time_str = now.strftime("%H:%M")
+
+            # Check if we are in the active window
+            # Assuming start < end (e.g. 18:00 to 19:00)
+            in_window = Config.SCHEDULE_START_TIME <= current_time_str < Config.SCHEDULE_END_TIME
+
+            if in_window:
+                try:
+                    run_once(gmail, processor, state)
+                except Exception as e:
+                    print(f"⚠ Cycle error: {e}. Retrying in 10s...")
+                    time.sleep(10)
+                    continue
+
+                time.sleep(Config.POLL_INTERVAL_SECONDS)
+            else:
+                # Calculate time to sleep until next start time
+                start_dt = datetime.strptime(Config.SCHEDULE_START_TIME, "%H:%M").replace(
+                    year=now.year, month=now.month, day=now.day
+                )
                 
-            time.sleep(60) # Poll every minute for "instant" trigger
+                # If start time has passed today (and we are not in window), target tomorrow
+                if now >= start_dt:
+                    start_dt += timedelta(days=1)
+
+                sleep_seconds = (start_dt - now).total_seconds()
+                next_run_str = start_dt.strftime("%Y-%m-%d %H:%M:%S")
+
+                print(f"[{now.strftime('%H:%M:%S')}] Outside schedule. Sleeping until {next_run_str} ({int(sleep_seconds/60)} min)...")
+
+                # Sleep in chunks to allow interrupt or logic updates if needed,
+                # but simple sleep is fine for this script.
+                # Capping sleep to max 1 hour (3600s) to periodically check/log aliveness is good practice.
+                sleep_chunk = min(sleep_seconds, 3600)
+                time.sleep(sleep_chunk)
+
     except KeyboardInterrupt:
         print("\nStopping automation...")
     finally:
