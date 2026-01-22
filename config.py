@@ -28,8 +28,8 @@ class Config:
     SUMMARY_RECIPIENT = 'barney.w@biomedglobal.com'
     
     # Automated Scheduling
-    DAILY_SCHEDULE_TIME = "17:30"
-    POLL_INTERVAL_SECONDS = 1  # For schedule check loop
+    DAILY_SCHEDULE_TIME = "18:00"
+    POLL_INTERVAL_SECONDS = 300  # Poll every 5 minutes to avoid bandwidth limits
     
     # AI Settings
     AI_MODEL = "gpt-4o-mini"

@@ -83,8 +83,6 @@ class CRMAnalyzer:
                 <h1>CRM Summary: {now}</h1>
                 
                 {self._section1_top_picks()}
-                {self._section2_executive_overview()}
-                {self._section3_performance()}
                 {self._section4_top_brands()}
                 {self._section5_high_value_deals()}
                 {self._section6_recent_won_deals()}
