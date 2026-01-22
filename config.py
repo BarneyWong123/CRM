@@ -29,7 +29,7 @@ class Config:
     
     # Automated Scheduling
     DAILY_SCHEDULE_TIME = "18:00"
-    POLL_INTERVAL_SECONDS = 300  # Poll every 5 minutes to avoid bandwidth limits
+    POLL_INTERVAL_SECONDS = 300  # Poll every 5 minutes to stay within bandwidth limits
     
     # AI Settings
     AI_MODEL = "gpt-4o-mini"

@@ -3,6 +3,9 @@ import pandas as pd
 import random
 from typing import Dict, List, Any
 from datetime import datetime
+import io
+import base64
+import matplotlib.pyplot as plt
 from config import Config
 
 class CRMAnalyzer:
@@ -83,6 +86,7 @@ class CRMAnalyzer:
                 <h1>CRM Summary: {now}</h1>
                 
                 {self._section1_top_picks()}
+                {self._generate_charts_section()}
                 {self._section4_top_brands()}
                 {self._section5_high_value_deals()}
                 {self._section6_recent_won_deals()}
@@ -110,26 +114,36 @@ class CRMAnalyzer:
             from openai import OpenAI
             client = OpenAI(api_key=Config.OPENAI_API_KEY)
             
-            # Prepare summary data for the AI
+            # Prepare granular summary data for the AI
             total_value = self.df[self.cols['value']].sum()
             owner_stats = ""
             for owner in Config.TARGET_OWNERS:
                 owner_df = self.df[self.df[self.cols['owner']] == owner]
                 owner_stats += f"- {owner}: RM {owner_df[self.cols['value']].sum():,.2f} total, {len(owner_df[owner_df[self.cols['status']] == 'Open'])} open deals.\n"
             
-            high_val_count = len(self.df[(self.df[self.cols['status']] == 'Open') & (self.df[self.cols['value']] > 500000)])
+            # Extract top 5 open deals for granular commentary
+            open_deals = self.df[self.df[self.cols['status']] == 'Open'].sort_values(self.cols['value'], ascending=False).head(5)
+            deal_details = ""
+            for _, row in open_deals.iterrows():
+                deal_details += f"- Account: {row[self.cols['account']]}, Brand: {row[self.cols['brand']]}, Value: RM {row[self.cols['value']]:,.2f}, Product: {row[self.cols['product']]}, Note: {str(row[self.cols['note']])[:100]}\n"
+
             top_brands = self.df[self.cols['brand']].value_counts().head(3).to_dict()
             
             prompt = f"""
-            As a sales strategy assistant, provide 3 brief, high-impact strategic insights based on this CRM data:
-            - Total Pipeline Value: RM {total_value:,.2f}
-            - Owner Performance:
-            {owner_stats}
-            - High-Value Deals (>500k) pending: {high_val_count}
-            - Current Top 3 Brands being pitched: {top_brands}
+            As a sales strategy assistant, provide:
+            1. THREE high-impact strategic insights based on the general pipeline performance.
+            2. BRIEF strategic commentary on at least TWO of the specific individual opportunities listed below.
             
-            Analyze the distribution and value. Keep each point professional, concise, and action-oriented.
-            Return the output as an HTML bulleted list (<ul> and <li>).
+            CRM Data Summary:
+            - Total Pipeline Value: RM {total_value:,.2f}
+            {owner_stats}
+            - Current Top 3 Brands: {top_brands}
+            
+            Individual Opportunities for Commentary:
+            {deal_details}
+            
+            Keep the response professional, action-oriented, and formatted as an HTML bulleted list (<ul> and <li>).
+            Comment on the specific accounts by name. 
             Do not include any other text before or after the list.
             """
             
@@ -286,3 +300,53 @@ class CRMAnalyzer:
             rows += f"<tr><td>{row[self.cols['account']]}</td><td>{row[self.cols['owner']]}</td><td class='price'>RM {row[self.cols['value']]:,.2f}</td><td>{comp}</td></tr>"
             
         return f"<h2>⚠️ Lost Deals</h2><table><thead><tr><th>Account</th><th>Owner</th><th>Value</th><th>Competitor</th></tr></thead><tbody>{rows}</tbody></table>"
+
+    def _generate_charts_section(self) -> str:
+        """Generate charts and return them as HTML image tags (Base64)."""
+        try:
+            # 1. Pipeline by Brand
+            brand_pipeline = self.df.groupby(self.cols['brand'])[self.cols['value']].sum().sort_values(ascending=False).head(5)
+            
+            plt.figure(figsize=(8, 4))
+            brand_pipeline.plot(kind='bar', color='#3b82f6')
+            plt.title('Top 5 Brands by Pipeline Value (RM)', fontsize=12, pad=20)
+            plt.xticks(rotation=45, ha='right')
+            plt.ylabel('Value (RM)')
+            plt.tight_layout()
+            
+            brand_chart = self._fig_to_base64(plt.gcf())
+            plt.close()
+
+            # 2. Owner Performance (Open Value)
+            owner_pipeline = self.df.groupby(self.cols['owner'])[self.cols['value']].sum()
+            
+            plt.figure(figsize=(8, 4))
+            owner_pipeline.plot(kind='pie', autopct='%1.1f%%', colors=['#3b82f6', '#10b981', '#f59e0b'], startangle=140)
+            plt.title('Pipeline Distribution by Owner', fontsize=12, pad=20)
+            plt.ylabel('')
+            plt.tight_layout()
+            
+            owner_chart = self._fig_to_base64(plt.gcf())
+            plt.close()
+
+            return f"""
+            <h2>📈 Data Analytics & Visuals</h2>
+            <div style="display: flex; gap: 20px; flex-direction: column;">
+                <div style="text-align: center; background: #f9fafb; padding: 15px; border-radius: 8px;">
+                    <img src="data:image/png;base64,{brand_chart}" style="max-width: 100%; height: auto;">
+                </div>
+                <div style="text-align: center; background: #f9fafb; padding: 15px; border-radius: 8px;">
+                    <img src="data:image/png;base64,{owner_chart}" style="max-width: 100%; height: auto;">
+                </div>
+            </div>
+            """
+        except Exception as e:
+            print(f"Chart generation error: {e}")
+            return f"<p style='color: #ef4444;'>Visual analytics unavailable: {e}</p>"
+
+    def _fig_to_base64(self, fig) -> str:
+        """Convert matplotlib figure to Base64 string."""
+        buf = io.BytesIO()
+        fig.savefig(buf, format='png', bbox_inches='tight')
+        buf.seek(0)
+        return base64.b64encode(buf.read()).decode('utf-8')
