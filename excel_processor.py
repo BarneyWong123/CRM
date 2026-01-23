@@ -18,12 +18,13 @@ class ExcelProcessor:
         """
         self.target_sheet = target_sheet or Config.TARGET_SHEET_NAME
     
-    def extract_sheet(self, filepath: str) -> Optional[pd.DataFrame]:
+    def extract_sheet(self, filepath: str, header_row: int = 0) -> Optional[pd.DataFrame]:
         """
         Extract a specific sheet from an Excel file.
         
         Args:
             filepath: Path to the Excel file
+            header_row: Row to use as header (0-indexed)
         
         Returns:
             DataFrame containing the sheet data, or None if sheet not found
@@ -46,7 +47,7 @@ class ExcelProcessor:
                 return None
             
             # Read the target sheet
-            df = pd.read_excel(filepath, sheet_name=self.target_sheet)
+            df = pd.read_excel(filepath, sheet_name=self.target_sheet, header=header_row)
             
             print(f"✓ Successfully extracted sheet '{self.target_sheet}'")
             print(f"  Rows: {len(df)}, Columns: {len(df.columns)}")

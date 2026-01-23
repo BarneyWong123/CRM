@@ -5,6 +5,8 @@ from typing import Dict, List, Any
 from datetime import datetime
 import io
 import base64
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from config import Config
 
