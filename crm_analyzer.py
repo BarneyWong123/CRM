@@ -5,6 +5,8 @@ from typing import Dict, List, Any
 from datetime import datetime
 import io
 import base64
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from config import Config
 
@@ -161,11 +163,12 @@ class CRMAnalyzer:
             return f"<p style='color: #ef4444;'>AI Analysis currently unavailable: {str(e)}</p>"
 
     def _section1_top_picks(self) -> str:
-        """Section 1: TOP 3 OPPORTUNITY PICKS OF THE DAY."""
+        """Section 1: LATEST 3 ADDED OPPORTUNITIES."""
         open_deals = self.df[self.df[self.cols['status']] == 'Open']
         if open_deals.empty: return ""
         
-        picks = open_deals.sample(min(3, len(open_deals)))
+        # Select last 3 deals (assuming chronological order) and reverse to show newest first
+        picks = open_deals.tail(3).iloc[::-1]
         
         rows_html = ""
         for _, row in picks.iterrows():
@@ -181,7 +184,7 @@ class CRMAnalyzer:
             """
             
         return f"""
-        <h2>⭐ Top 3 Opportunity Picks</h2>
+        <h2>⭐ Latest 3 Added Opportunities</h2>
         <table>
             <thead>
                 <tr>
