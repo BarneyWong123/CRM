@@ -3,9 +3,6 @@ import pandas as pd
 import random
 from typing import Dict, List, Any
 from datetime import datetime
-import io
-import base64
-import matplotlib.pyplot as plt
 from config import Config
 from opportunity_tracker import OpportunityTracker
 
@@ -308,10 +305,8 @@ class CRMAnalyzer:
         return f"<h2>⚠️ Lost Deals</h2><table><thead><tr><th>Account</th><th>Owner</th><th>Value</th><th>Competitor</th></tr></thead><tbody>{rows}</tbody></table>"
 
     def _generate_charts_section(self) -> str:
-        """Generate charts and return them as HTML image tags (Base64)."""
+        """Generate HTML/CSS bar chart for email compatibility."""
         try:
-            import numpy as np
-            
             # Group by Brand and Owner, get top 5 brands by total value
             pivot_data = self.df.pivot_table(
                 values=self.cols['value'],
@@ -323,47 +318,61 @@ class CRMAnalyzer:
             
             # Get top 5 brands by total value
             brand_totals = pivot_data.sum(axis=1).sort_values(ascending=False)
-            top_brands = brand_totals.head(5).index
+            top_brands = brand_totals.head(5).index.tolist()
             pivot_data = pivot_data.loc[top_brands]
             
-            # Create grouped bar chart
-            fig, ax = plt.subplots(figsize=(10, 5))
+            # Get max value for scaling
+            max_value = pivot_data.values.max() if pivot_data.values.max() > 0 else 1
             
-            x = np.arange(len(top_brands))
-            width = 0.35
             owners = pivot_data.columns.tolist()
-            colors = ['#3b82f6', '#10b981', '#f59e0b']
+            colors = {'Arora Johney': '#3b82f6', 'Jiun Hao (Barney) Wong': '#10b981'}
             
-            for i, owner in enumerate(owners):
-                offset = width * (i - len(owners)/2 + 0.5)
-                bars = ax.bar(x + offset, pivot_data[owner].values, width, 
-                             label=owner, color=colors[i % len(colors)])
+            # Build HTML bars
+            bars_html = ""
+            for brand in top_brands:
+                bars_html += f'<div style="margin-bottom: 20px;">'
+                bars_html += f'<div style="font-weight: bold; margin-bottom: 8px; color: #374151;">{brand}</div>'
+                
+                for owner in owners:
+                    value = pivot_data.loc[brand, owner]
+                    if value > 0:
+                        width_pct = min((value / max_value) * 100, 100)
+                        color = colors.get(owner, '#6b7280')
+                        owner_short = owner.split()[0]  # First name only
+                        
+                        # Format value
+                        if value >= 1000000:
+                            value_str = f"RM {value/1000000:.1f}M"
+                        else:
+                            value_str = f"RM {value/1000:.0f}K"
+                        
+                        bars_html += f'''
+                        <div style="display: flex; align-items: center; margin-bottom: 4px;">
+                            <div style="width: 60px; font-size: 11px; color: #6b7280;">{owner_short}</div>
+                            <div style="flex: 1; background: #e5e7eb; border-radius: 4px; height: 20px; margin-right: 10px;">
+                                <div style="width: {width_pct}%; background: {color}; height: 100%; border-radius: 4px;"></div>
+                            </div>
+                            <div style="width: 80px; font-size: 12px; font-weight: bold; color: #059669; text-align: right;">{value_str}</div>
+                        </div>
+                        '''
+                
+                bars_html += '</div>'
             
-            ax.set_xlabel('Brand')
-            ax.set_ylabel('Pipeline Value (RM)')
-            ax.set_title('Top 5 Brands by Pipeline Value - By Sales Employee', fontsize=12, pad=20)
-            ax.set_xticks(x)
-            ax.set_xticklabels(top_brands, rotation=45, ha='right')
-            ax.legend(title='Sales Employee', loc='upper right')
-            ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'RM {x/1e6:.1f}M' if x >= 1e6 else f'RM {x/1e3:.0f}K'))
-            
-            plt.tight_layout()
-            brand_chart = self._fig_to_base64(fig)
-            plt.close()
+            # Legend
+            legend_html = '<div style="display: flex; gap: 20px; justify-content: center; margin-top: 15px; font-size: 12px;">'
+            for owner in owners:
+                color = colors.get(owner, '#6b7280')
+                legend_html += f'<div><span style="display: inline-block; width: 12px; height: 12px; background: {color}; border-radius: 2px; margin-right: 5px;"></span>{owner}</div>'
+            legend_html += '</div>'
 
             return f"""
-            <h2>📈 Data Analytics & Visuals</h2>
-            <div style="text-align: center; background: #f9fafb; padding: 15px; border-radius: 8px;">
-                <img src="data:image/png;base64,{brand_chart}" style="max-width: 100%; height: auto;">
+            <h2>📈 Top 5 Brands by Pipeline Value</h2>
+            <div style="background: #f9fafb; padding: 20px; border-radius: 8px;">
+                {bars_html}
+                {legend_html}
             </div>
             """
         except Exception as e:
             print(f"Chart generation error: {e}")
             return f"<p style='color: #ef4444;'>Visual analytics unavailable: {e}</p>"
 
-    def _fig_to_base64(self, fig) -> str:
-        """Convert matplotlib figure to Base64 string."""
-        buf = io.BytesIO()
-        fig.savefig(buf, format='png', bbox_inches='tight')
-        buf.seek(0)
-        return base64.b64encode(buf.read()).decode('utf-8')
