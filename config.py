@@ -22,6 +22,7 @@ class Config:
     # Email search settings
     # We poll for the CRM label
     EMAIL_LABEL = 'CRM'
+    SEARCH_DAYS_BACK = int(os.getenv('SEARCH_DAYS_BACK', '7'))
     
     # Analysis settings
     TARGET_OWNERS = ['Arora Johney', 'Jiun Hao (Barney) Wong']

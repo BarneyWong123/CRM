@@ -7,6 +7,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import os
 import base64
+from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from config import Config
 
@@ -63,8 +64,13 @@ class GmailClient:
                 self.imap.select('INBOX')
                 print(f"⚠ Label '{Config.EMAIL_LABEL}' not found, checking INBOX...")
             
-            # Search for all messages (we handle deduplication locally)
-            status, messages = self.imap.search(None, 'ALL')
+            # Calculate date for SINCE criteria
+            since_date = (datetime.now() - timedelta(days=Config.SEARCH_DAYS_BACK)).strftime("%d-%b-%Y")
+
+            # Search for messages since that date
+            print(f"Searching for emails since {since_date}...")
+            status, messages = self.imap.search(None, f'(SINCE "{since_date}")')
+
             if status != 'OK' or not messages[0]:
                 return []
             
