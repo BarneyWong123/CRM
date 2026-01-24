@@ -7,6 +7,7 @@ import io
 import base64
 import matplotlib.pyplot as plt
 from config import Config
+from opportunity_tracker import OpportunityTracker
 
 class CRMAnalyzer:
     """Analyzer for CRM data specializing in the MY-Clinical sheet."""
@@ -51,6 +52,11 @@ class CRMAnalyzer:
         """Generate the full formatted HTML CRM summary report."""
         now = datetime.now().strftime("%B %d, %Y")
         
+        # Track and compare opportunities
+        tracker = OpportunityTracker()
+        new_opps, updated_opps = tracker.compare_and_update(self.df, self.cols)
+        changes_html = tracker.generate_changes_html(new_opps, updated_opps)
+        
         # Get AI insights
         ai_insights = self._get_ai_insights()
         
@@ -89,8 +95,6 @@ class CRMAnalyzer:
                 {self._generate_charts_section()}
                 {self._section4_top_brands()}
                 {self._section5_high_value_deals()}
-                {self._section6_recent_won_deals()}
-                {self._section7_lost_deals()}
                 
                 <div class="ai-box">
                     <div class="ai-title">🤖 AI Strategic Insights (GPT-4o mini)</div>
@@ -98,6 +102,8 @@ class CRMAnalyzer:
                         {ai_insights}
                     </div>
                 </div>
+                
+                {changes_html}
                 
                 <div class="footer">
                     Automated CRM Analysis &bull; MY-Clinical Sheet &bull; Biomed Global
@@ -304,40 +310,51 @@ class CRMAnalyzer:
     def _generate_charts_section(self) -> str:
         """Generate charts and return them as HTML image tags (Base64)."""
         try:
-            # 1. Pipeline by Brand
-            brand_pipeline = self.df.groupby(self.cols['brand'])[self.cols['value']].sum().sort_values(ascending=False).head(5)
+            import numpy as np
             
-            plt.figure(figsize=(8, 4))
-            brand_pipeline.plot(kind='bar', color='#3b82f6')
-            plt.title('Top 5 Brands by Pipeline Value (RM)', fontsize=12, pad=20)
-            plt.xticks(rotation=45, ha='right')
-            plt.ylabel('Value (RM)')
+            # Group by Brand and Owner, get top 5 brands by total value
+            pivot_data = self.df.pivot_table(
+                values=self.cols['value'],
+                index=self.cols['brand'],
+                columns=self.cols['owner'],
+                aggfunc='sum',
+                fill_value=0
+            )
+            
+            # Get top 5 brands by total value
+            brand_totals = pivot_data.sum(axis=1).sort_values(ascending=False)
+            top_brands = brand_totals.head(5).index
+            pivot_data = pivot_data.loc[top_brands]
+            
+            # Create grouped bar chart
+            fig, ax = plt.subplots(figsize=(10, 5))
+            
+            x = np.arange(len(top_brands))
+            width = 0.35
+            owners = pivot_data.columns.tolist()
+            colors = ['#3b82f6', '#10b981', '#f59e0b']
+            
+            for i, owner in enumerate(owners):
+                offset = width * (i - len(owners)/2 + 0.5)
+                bars = ax.bar(x + offset, pivot_data[owner].values, width, 
+                             label=owner, color=colors[i % len(colors)])
+            
+            ax.set_xlabel('Brand')
+            ax.set_ylabel('Pipeline Value (RM)')
+            ax.set_title('Top 5 Brands by Pipeline Value - By Sales Employee', fontsize=12, pad=20)
+            ax.set_xticks(x)
+            ax.set_xticklabels(top_brands, rotation=45, ha='right')
+            ax.legend(title='Sales Employee', loc='upper right')
+            ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, p: f'RM {x/1e6:.1f}M' if x >= 1e6 else f'RM {x/1e3:.0f}K'))
+            
             plt.tight_layout()
-            
-            brand_chart = self._fig_to_base64(plt.gcf())
-            plt.close()
-
-            # 2. Owner Performance (Open Value)
-            owner_pipeline = self.df.groupby(self.cols['owner'])[self.cols['value']].sum()
-            
-            plt.figure(figsize=(8, 4))
-            owner_pipeline.plot(kind='pie', autopct='%1.1f%%', colors=['#3b82f6', '#10b981', '#f59e0b'], startangle=140)
-            plt.title('Pipeline Distribution by Owner', fontsize=12, pad=20)
-            plt.ylabel('')
-            plt.tight_layout()
-            
-            owner_chart = self._fig_to_base64(plt.gcf())
+            brand_chart = self._fig_to_base64(fig)
             plt.close()
 
             return f"""
             <h2>📈 Data Analytics & Visuals</h2>
-            <div style="display: flex; gap: 20px; flex-direction: column;">
-                <div style="text-align: center; background: #f9fafb; padding: 15px; border-radius: 8px;">
-                    <img src="data:image/png;base64,{brand_chart}" style="max-width: 100%; height: auto;">
-                </div>
-                <div style="text-align: center; background: #f9fafb; padding: 15px; border-radius: 8px;">
-                    <img src="data:image/png;base64,{owner_chart}" style="max-width: 100%; height: auto;">
-                </div>
+            <div style="text-align: center; background: #f9fafb; padding: 15px; border-radius: 8px;">
+                <img src="data:image/png;base64,{brand_chart}" style="max-width: 100%; height: auto;">
             </div>
             """
         except Exception as e:
