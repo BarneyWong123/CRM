@@ -6,6 +6,11 @@ from datetime import datetime
 from config import Config
 from opportunity_tracker import OpportunityTracker
 
+try:
+    from openai import OpenAI
+except ImportError:
+    OpenAI = None
+
 class CRMAnalyzer:
     """Analyzer for CRM data specializing in the MY-Clinical sheet."""
     
@@ -23,6 +28,10 @@ class CRMAnalyzer:
         """
         # Rename columns for easier access based on identified indices
         self.df = df.copy()
+
+        # Validate that we have enough columns (index 21 is accessed later)
+        if len(self.df.columns) < 22:
+            raise ValueError(f"CRM Dataframe requires at least 22 columns, found {len(self.df.columns)}")
         
         # We need to find the actual header row if row 0 is just garbage
         # In our inspection, row 0 of the DATA (from Header Row 2) had the mappings
@@ -113,8 +122,10 @@ class CRMAnalyzer:
 
     def _get_ai_insights(self) -> str:
         """Fetch AI-generated strategic insights based on the current data."""
+        if OpenAI is None:
+             return "<p style='color: #ef4444;'>AI Analysis unavailable: openai package not installed.</p>"
+
         try:
-            from openai import OpenAI
             client = OpenAI(api_key=Config.OPENAI_API_KEY)
             
             # Prepare granular summary data for the AI
